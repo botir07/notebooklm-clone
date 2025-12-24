@@ -1,160 +1,71 @@
-
 import React, { useState } from 'react';
-import { Source, InfographicData, PresentationData, FlashcardData, QuizData } from './types';
+import { StudioSidebar } from './components/StudioSidebar'; 
 import { ProjectSidebar } from './components/ProjectSidebar';
-import { StudioSidebar } from './components/StudioSidebar';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { ImageEditor } from './components/ImageEditor';
-import { ProjectModal } from './components/ProjectModal';
-import { Settings, Sparkles, Layers } from 'lucide-react';
-import { analyzeSource } from './services/geminiService';
+import { analyzeSource, generatePresentation, generateFlashcards, generateQuiz } from './services/geminiService';
+import { Source, Project } from './types';
 
 const App: React.FC = () => {
-  const [sources, setSources] = useState<Source[]>([]);
-  const [infographics, setInfographics] = useState<InfographicData[]>([]);
-  const [presentations, setPresentations] = useState<PresentationData[]>([]);
-  const [flashcards, setFlashcards] = useState<FlashcardData[]>([]);
-  const [quizzes, setQuizzes] = useState<QuizData[]>([]);
-  
   const [activeTab, setActiveTab] = useState<'chat' | 'editor'>('chat');
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const addSource = async (newSource: { name: string, data?: string, type: 'pdf' | 'text' }) => {
     const id = Math.random().toString(36).substr(2, 9);
-    const sourceObj: Source = { 
-      ...newSource, 
-      id, 
-      isAnalyzing: true, 
-      createdAt: Date.now() 
-    };
+    const sourceObj: Source = { ...newSource, id, isAnalyzing: true, createdAt: Date.now() };
     setSources(prev => [...prev, sourceObj]);
-    setSelectedSourceIds(prev => [...prev, id]);
-
-    if (newSource.type === 'pdf' && newSource.data) {
+    if (newSource.data) {
       try {
-        const analysis = await analyzeSource({ data: newSource.data, mimeType: 'application/pdf' });
+        const analysis = await analyzeSource(newSource.data);
         setSources(prev => prev.map(s => s.id === id ? { ...s, analysis, isAnalyzing: false } : s));
       } catch (err) {
-        console.error("Tahlilda xatolik:", err);
         setSources(prev => prev.map(s => s.id === id ? { ...s, isAnalyzing: false } : s));
       }
-    } else {
-      setSources(prev => prev.map(s => s.id === id ? { ...s, isAnalyzing: false } : s));
     }
   };
 
-  const toggleSourceSelection = (id: string) => {
-    setSelectedSourceIds(prev => 
-      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
-    );
-  };
-
-  const handleNewPoster = (data: InfographicData) => {
-    setInfographics([data, ...infographics]);
-    setSelectedItemId(data.id);
-    setIsModalOpen(true);
-  };
-
-  const handleNewPresentation = (data: PresentationData) => {
-    setPresentations([data, ...presentations]);
-    setSelectedItemId(data.id);
-    setIsModalOpen(true);
-  };
-
-  const handleNewFlashcards = (data: FlashcardData) => {
-    setFlashcards([data, ...flashcards]);
-    setSelectedItemId(data.id);
-    setIsModalOpen(true);
-  };
-
-  const handleNewQuiz = (data: QuizData) => {
-    setQuizzes([data, ...quizzes]);
-    setSelectedItemId(data.id);
-    setIsModalOpen(true);
-  };
-
-  const handleSelectItem = (id: string, type: string) => {
-    if (type === 'chat') {
-       setActiveTab('chat');
-       setSelectedItemId(null);
-    } else {
-       setSelectedItemId(id);
-       setIsModalOpen(true);
-    }
+  const handleStudioAction = async (type: string) => {
+    if (sources.length === 0) return alert("Avval PDF yuklang!");
+    setIsGenerating(true);
+    try {
+      let result;
+      const latest = sources[sources.length - 1];
+      if (type === 'slaydlar') result = await generatePresentation(latest);
+      else if (type === 'kartochka') result = await generateFlashcards(latest);
+      else if (type === 'testlar') result = await generateQuiz(latest);
+      
+      const newProject: Project = {
+        id: Date.now().toString(),
+        title: "Loyiha: " + type,
+        type: type as any,
+        content: result,
+        createdAt: Date.now()
+      };
+      setProjects(prev => [newProject, ...prev]);
+    } catch (err) {
+      alert("AI xatosi yuz berdi");
+    } finally { setIsGenerating(false); }
   };
 
   return (
-    <div className="h-screen flex bg-white text-slate-900 overflow-hidden font-sans">
-      <ProjectSidebar 
-        sources={sources}
-        onAddSource={addSource}
-        onSelectItem={(id) => handleSelectItem(id, 'source')}
-        selectedId={selectedItemId}
-        selectedSourceIds={selectedSourceIds}
-        onToggleSource={toggleSourceSelection}
-      />
-
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-white border-x border-slate-100">
-        <header className="h-16 border-b border-slate-100 bg-white flex items-center justify-between px-8 shrink-0 z-30">
-          <div className="flex items-center gap-3">
-            <div className="bg-slate-950 p-2 rounded-xl text-white shadow-sm">
-              <Layers size={18} />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-slate-900 tracking-tighter text-lg leading-none">BilimGrafik</h1>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">AI Workspace</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="p-2.5 text-slate-400 hover:text-slate-900 rounded-xl transition-all">
-              <Settings size={18} />
-            </button>
-            <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
-               <Sparkles size={18} />
-            </div>
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <StudioSidebar projects={projects || []} onAction={handleStudioAction} isGenerating={isGenerating} />
+      <ProjectSidebar sources={sources || []} onAddSource={addSource} projects={projects || []} />
+      <main className="flex-1 flex flex-col bg-white shadow-2xl m-2 rounded-[2rem] overflow-hidden border">
+        <header className="h-16 border-b flex items-center justify-between px-8 bg-slate-50/50">
+          <h1 className="font-black text-indigo-600">BILIMGRAFIK AI</h1>
+          <div className="flex bg-white p-1 rounded-xl border">
+            <button onClick={() => setActiveTab('chat')} className={`px-6 py-1.5 rounded-lg text-xs font-bold ${activeTab === 'chat' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>CHAT</button>
+            <button onClick={() => setActiveTab('editor')} className={`px-6 py-1.5 rounded-lg text-xs font-bold ${activeTab === 'editor' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>EDITOR</button>
           </div>
         </header>
-
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'chat' && (
-            <ChatWorkspace 
-              sources={sources.filter(s => selectedSourceIds.includes(s.id))} 
-              onNewInfographic={handleNewPoster} 
-            />
-          )}
-          {activeTab === 'editor' && <div className="p-12"><ImageEditor /></div>}
+        <div className="flex-1 relative overflow-hidden">
+          {activeTab === 'chat' ? <ChatWorkspace sources={sources || []} onNewInfographic={(d) => setProjects(p => [d, ...p])} /> : <ImageEditor />}
         </div>
       </main>
-
-      <StudioSidebar 
-        sources={sources}
-        infographics={infographics}
-        presentations={presentations}
-        flashcards={flashcards}
-        quizzes={quizzes}
-        selectedSourceIds={selectedSourceIds}
-        activeTab={activeTab as any}
-        onSelectItem={handleSelectItem}
-        onGeneratePoster={handleNewPoster}
-        onGeneratePresentation={handleNewPresentation}
-        onGenerateFlashcards={handleNewFlashcards}
-        onGenerateQuiz={handleNewQuiz}
-      />
-
-      {isModalOpen && selectedItemId && (
-        <ProjectModal 
-          itemId={selectedItemId}
-          infographics={infographics}
-          presentations={presentations}
-          flashcards={flashcards}
-          quizzes={quizzes}
-          onClose={() => setIsModalOpen(false)}
-        />
-      )}
     </div>
   );
 };
-
 export default App;

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { automatePdfToPoster, querySources } from '../services/geminiService';
 import { Loader2, Send, Sparkles, MessageSquare, Image as ImageIcon, Info } from 'lucide-react';
@@ -17,6 +16,7 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Xabarlar ko'payganda avtomatik pastga tushirish
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -26,22 +26,26 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMsg = input.toLowerCase();
+    const userMsgText = input;
+    const userMsgLower = input.toLowerCase();
+    
+    // Foydalanuvchi xabarini ekranda ko'rsatish
+    const updatedMessages = [...messages, { role: 'user' as const, text: userMsgText, type: 'text' as const }];
+    setMessages(updatedMessages);
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: input, type: 'text' }]);
     setLoading(true);
 
     try {
+      // Poster yaratish so'rovini tekshirish
       const isInfographicRequest = 
-        userMsg.includes('poster') || 
-        userMsg.includes('infografika') || 
-        userMsg.includes('yarat') || 
-        userMsg.includes('chiz');
+        userMsgLower.includes('poster') || 
+        userMsgLower.includes('infografika') || 
+        userMsgLower.includes('yarat') || 
+        userMsgLower.includes('chiz');
 
       if (isInfographicRequest && sources.length > 0) {
         const latestSource = sources[sources.length - 1];
         
-        // Agar hujjat hali tahlil qilinayotgan bo'lsa, biroz kutamiz yoki ogohlantiramiz
         if (latestSource.isAnalyzing) {
           setMessages(prev => [...prev, { 
             role: 'ai', 
@@ -60,23 +64,26 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
         onNewInfographic(result);
         setMessages(prev => [...prev, { 
           role: 'ai', 
-          text: "Ajoyib! Sizning so'rovingiz asosida yangi infografika posteri tayyorlandi. Uni 'Posterlar' bo'limida ko'rishingiz va yuklab olishingiz mumkin.",
+          text: "Ajoyib! Sizning so'rovingiz asosida yangi infografika posteri tayyorlandi. Uni o'ng tarafdagi 'Studiya' bo'limida ko'rishingiz mumkin.",
           type: 'action'
         }]);
       } else {
+        // Savol-javob rejimi
         if (sources.length === 0) {
           setMessages(prev => [...prev, { 
             role: 'ai', 
-            text: "Kechirasiz, hali hech qanday manba (PDF) yuklanmagan. Savol berish uchun avval manba qo'shing.", 
+            text: "Kechirasiz, hali hech qanday manba (PDF) yuklanmagan. Savol berish uchun avval chap paneldan manba qo'shing.", 
             type: 'text' 
           }]);
         } else {
-          const answer = await querySources(input, sources);
+          // TUZATISH: querySources funksiyasiga tarix va manbalarni to'liq yuboramiz
+          const answer = await querySources(updatedMessages, sources);
           setMessages(prev => [...prev, { role: 'ai', text: answer, type: 'text' }]);
         }
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: "Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.", type: 'text' }]);
+      console.error("Chat hatoligi:", err);
+      setMessages(prev => [...prev, { role: 'ai', text: "Xatolik yuz berdi. Backend server ishlayotganini va API kalitni tekshiring.", type: 'text' }]);
     } finally {
       setLoading(false);
     }
@@ -84,6 +91,7 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
 
   return (
     <div className="h-full flex flex-col bg-white">
+      {/* Xabarlar maydoni */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-300`}>
@@ -119,20 +127,21 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
                 <Loader2 className="animate-spin text-indigo-600" size={14} />
               </div>
               <div className="bg-slate-50 px-6 py-4 rounded-3xl border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Model javob tayyorlamoqda...</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">AI o'ylamoqda...</span>
               </div>
             </div>
           </div>
         )}
       </div>
 
+      {/* Input maydoni */}
       <div className="p-8 border-t border-slate-100 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
         <div className="max-w-4xl mx-auto relative group">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-            placeholder="Hujjat bo'yicha savol bering yoki 'poster yarat' deb yozing..."
+            placeholder="Yuklangan PDF bo'yicha savol bering..."
             className="w-full h-24 p-6 pr-32 bg-slate-100 border-2 border-transparent focus:border-indigo-500/20 focus:bg-white rounded-[2.5rem] focus:ring-4 focus:ring-indigo-500/5 outline-none resize-none text-sm font-bold placeholder:text-slate-400 transition-all shadow-inner"
           />
           <div className="absolute right-5 bottom-5 flex gap-3">
@@ -148,7 +157,7 @@ export const ChatWorkspace: React.FC<Props> = ({ sources, onNewInfographic }) =>
         </div>
         <div className="flex justify-center gap-6 mt-6">
            <div className="flex items-center gap-2 text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
-             <Info size={12} /> Faqat manba asosida
+             <Info size={12} /> Faqat manbalar asosida
            </div>
            <div className="flex items-center gap-2 text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
              <ImageIcon size={12} /> Poster rejimi faol
