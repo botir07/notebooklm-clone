@@ -1,0 +1,7 @@
+{
+  "name": "tayyor",
+  "description": "Educational infographic generator strictly in Uzbek Latin, combined with a powerful AI image editor for retro filters, object removal, and creative enhancements.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
